@@ -22,14 +22,16 @@ from .interface_layout import InterfaceLayout
 from .terminal_display import TerminalDisplay
 
 from .status_events import StatusEvents
+from .settings import VERSION
+from .school_network import SchoolNetworkControls, WARNING
 
-class QuantumApp(InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, ConnectionControls, CalculationControls, tk.Tk):
+class QuantumApp(SchoolNetworkControls, InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, ConnectionControls, CalculationControls, tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Quantum ESPRESSO Controller")
-        self.geometry("1020x850")
-        self.minsize(850, 720)
+        self.title(f"Quantum ESPRESSO Controller v{VERSION}")
+        self.geometry("1080x900")
+        self.minsize(900, 800)
 
         self.events = queue.Queue()
         self.docker_busy = False
@@ -50,6 +52,7 @@ class QuantumApp(InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, 
         self.cancel_connection = False
         self.closing = False
 
+        self.location_marker = ""
         self.ready_marker = ""
         self.job_marker = ""
         self.max_marker = "QM_MAX_" + secrets.token_hex(16)
@@ -59,6 +62,11 @@ class QuantumApp(InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, 
         self.method = tk.StringVar(value="local")
         self.compose_path = tk.StringVar(value=self.load_path())
         self.bronco_id = tk.StringVar()
+        self.password = tk.StringVar()
+        self.login_secret = None
+        self.network_approved = False
+        self.network_checking = False
+        self.network_status = tk.StringVar(value=WARNING)
 
         self.connection_status = tk.StringVar(value="Terminal: DISCONNECTED")
         self.activity = tk.StringVar(value="Choose a connection method.")
@@ -69,3 +77,4 @@ class QuantumApp(InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, 
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.after(100, self.poll_events)
         self.after(300, self.refresh_docker_status)
+        self.after(400, self.check_school_network)

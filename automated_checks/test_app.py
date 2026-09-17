@@ -1,4 +1,6 @@
 import unittest
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -7,9 +9,18 @@ import app_code.window as module
 
 
 class DisplayTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            subprocess.run([sys.executable, "-c", "import tkinter as tk; root=tk.Tk(); root.destroy()"], check=True, capture_output=True, timeout=10)
+        except (subprocess.SubprocessError, OSError) as error:
+            raise unittest.SkipTest(f"Tk graphical session unavailable: {type(error).__name__}")
+
     def setUp(self):
         self.no_poll = patch.object(module.QuantumApp, 'refresh_docker_status')
         self.no_poll.start()
+        self.no_network = patch.object(module.QuantumApp, 'check_school_network')
+        self.no_network.start()
         self.app = module.QuantumApp()
         self.app.geometry('850x720')
         self.app.update()
@@ -22,6 +33,12 @@ class DisplayTests(unittest.TestCase):
             self.app.after_cancel(callback)
         self.app.destroy()
         self.no_poll.stop()
+        self.no_network.stop()
+
+    def test_version_password_and_compose_widgets(self):
+        self.assertEqual(self.app.title(), 'Quantum ESPRESSO Controller v0.2.0')
+        self.assertEqual(str(self.app.password_entry['show']), '*')
+        self.assertEqual(str(self.app.choose_button['text']), 'Choose Docker Compose File')
 
     def test_password_prompt_visible_and_connection_not_assumed(self):
         self.app.method.set('remote')
@@ -59,6 +76,9 @@ class DisplayTests(unittest.TestCase):
             self.app.sections.select(tab)
             self.app.update()
             self.assertGreater(self.app.terminal_view.winfo_height(), 80)
+            for key in ("Check current location", "List current directory", "Stop Calculation"):
+                self.assertEqual(self.app.buttons[key].master, self.app.quick_actions)
+                self.assertTrue(self.app.buttons[key].winfo_ismapped())
         self.assertEqual(str(self.app.buttons['Run pw.x']['text']), 'Start pw.x')
 
     def test_remote_disables_local_stop(self):
@@ -89,6 +109,7 @@ class DisplayTests(unittest.TestCase):
     def test_connect_button_dispatches_school_server(self):
         self.app.method.set('remote')
         self.app.bronco_id.set('testuser')
+        self.app.network_approved = True
         self.app.update_controls()
         with patch.object(module.threading, 'Thread') as thread:
             self.app.buttons['Connect'].invoke()
@@ -109,6 +130,7 @@ class DisplayTests(unittest.TestCase):
     def test_missing_id_produces_visible_feedback(self):
         self.app.method.set('remote')
         self.app.bronco_id.set('')
+        self.app.network_approved = True
         self.app.update_controls()
         self.app.buttons['Connect'].invoke()
         self.assertFalse(self.app.active)

@@ -17,6 +17,8 @@ from .settings import SERVER, SERVICE
 from .system_tools import run_command, find_program
 
 from .terminal_process import TerminalProcess
+from .ssh_login import LoginSecret
+from .school_network import WARNING, detect_school_network
 
 class ConnectionControls:
     def connect(self):
@@ -43,7 +45,12 @@ class ConnectionControls:
                 return
 
         else:
+            if not self.network_approved or self.network_checking:
+                self.password.set("")
+                self.activity.set(WARNING)
+                return
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", username):
+                self.password.set("")
                 self.activity.set("Enter your Bronco ID without @ or spaces.")
                 return
 
@@ -54,12 +61,15 @@ class ConnectionControls:
             self.stream = pyte.Stream(self.screen)
 
         except ImportError:
+            self.password.set("")
             self.activity.set(
                 "Missing terminal display package. "
                 "Run: python -m pip install pyte"
             )
             return
 
+        self.login_secret = LoginSecret(self.password.get()) if selected_method == "remote" else None
+        self.password.set("")
         self.terminal = None
         self.active = True
         self.connected = False
@@ -67,6 +77,8 @@ class ConnectionControls:
         self.disconnecting = False
         self.cancel_connection = False
         self.received = ""
+        self.location_marker = ""
+        self.user_status.set("Current user: checking…")
         self.job_marker = ""
         self.ready_marker = "QM_READY_" + secrets.token_hex(16)
 
@@ -176,6 +188,10 @@ class ConnectionControls:
                 ]
 
             else:
+                approved, network_message = detect_school_network()
+                self.events.put(("network_checked", (approved, network_message)))
+                if not approved:
+                    raise RuntimeError(WARNING)
                 ssh = find_program("ssh")
 
                 remote_command = (
@@ -189,6 +205,8 @@ class ConnectionControls:
                     "-tt",
                     "-o",
                     "ConnectTimeout=20",
+                    "-o",
+                    "NumberOfPasswordPrompts=1",
                     "-o",
                     "ServerAliveInterval=15",
                     "-o",
@@ -213,20 +231,37 @@ class ConnectionControls:
             self.events.put(("focus", ""))
 
             while True:
+                if (self.login_secret is not None and self.login_secret.sent_at is not None
+                        and time.monotonic() - self.login_secret.sent_at > 60):
+                    raise RuntimeError("School authentication timed out.")
                 try:
                     output = terminal.read()
                 except EOFError:
                     break
 
                 if output:
-                    self.events.put(("output", output))
+                    if method == "remote" and self.login_secret is not None:
+                        output = self.login_secret.process(output, terminal, marker)
+                        if marker in output:
+                            self.login_secret.clear()
+                            self.login_secret = None
+                    if output:
+                        self.events.put(("output", output))
                 elif not terminal.alive():
                     break
 
         except Exception as error:
-            self.events.put(("error", str(error)))
+            self.events.put(("error", "School connection failed. Check the network and login details." if method == "remote" else str(error)))
+            if terminal and method == "remote":
+                try:
+                    terminal.close()
+                except Exception:
+                    pass
 
         finally:
+            if self.login_secret is not None:
+                self.login_secret.clear()
+                self.login_secret = None
             if terminal:
                 if terminal.alive():
                     self.events.put(
@@ -266,10 +301,47 @@ class ConnectionControls:
             self.activity.set(str(error))
 
 
+    def list_current_directory(self):
+        """List the active shell folder, including hidden files, on either connection."""
+        if not self.connected or self.calculating or self.disconnecting or self.docker_busy:
+            return
+        self.send_command("pwd -P; ls -lah")
+
+
+    def check_current_location(self):
+        """Query the existing shell, so cd and user switches are respected."""
+        if not self.connected or self.calculating or self.disconnecting:
+            return
+        self.location_marker = "QM_LOCATION_" + secrets.token_hex(16)
+        self.user_status.set("Current user: checking…")
+        # Hex preserves spaces, Unicode and terminal wrapping. The marker plus
+        # encoded fields cannot be mistaken for the terminal's command echo.
+        command = (
+            "printf '\\n%s:' " + self.location_marker
+            + "; id -un | od -An -tx1 | tr -d ' \\n'; printf ':'; "
+            + "pwd -P | od -An -tx1 | tr -d ' \\n'; printf ':END\\n'"
+        )
+        try:
+            self.send(command + "\r")
+            marker = self.location_marker
+            def expired():
+                if self.location_marker == marker:
+                    self.location_marker = ""
+                    self.user_status.set("Current user: unavailable — check again at a shell prompt")
+            self.after(10000, expired)
+        except Exception as error:
+            self.location_marker = ""
+            self.user_status.set("Current user: unavailable")
+            self.activity.set(f"Location check failed: {error}")
+
+
     def disconnect(self):
         if not self.active or self.disconnecting:
             return
 
+        self.password.set("")
+        if self.login_secret is not None:
+            self.login_secret.clear()
         self.disconnecting = True
         self.cancel_connection = True
         self.connection_status.set("Terminal: DISCONNECTING…")

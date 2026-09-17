@@ -21,6 +21,9 @@ class StatusEvents:
 
 
     def close_app(self):
+        self.password.set("")
+        if self.login_secret is not None:
+            self.login_secret.clear()
         if self.active:
             self.closing = True
             self.disconnect()
@@ -35,7 +38,16 @@ class StatusEvents:
             while True:
                 kind, value = self.events.get_nowait()
 
-                if kind == "local_files_ready":
+                if kind == "network_checked":
+                    self.network_checking = False
+                    self.network_approved, message = value
+                    self.network_status.set(message)
+                    self.activity.set(message)
+                    if not self.network_approved:
+                        self.password.set("")
+                    self.update_controls()
+
+                elif kind == "local_files_ready":
                     folder, writable = value
                     LocalFilesWindow(self, folder, writable)
                     self.activity.set("Local file manager opened. Changes affect your shared work folder.")
@@ -84,6 +96,10 @@ class StatusEvents:
                     self.update_controls()
 
                 elif kind == "closed":
+                    self.password.set("")
+                    if self.login_secret is not None:
+                        self.login_secret.clear()
+                        self.login_secret = None
                     was_connected = self.connected
                     if self.calculating:
                         self.job_status.set("Calculation: session closed — completion not confirmed")
@@ -93,6 +109,7 @@ class StatusEvents:
                     self.disconnecting = False
                     self.connection_status.set("Terminal: DISCONNECTED")
                     self.user_status.set("Terminal user: not connected")
+                    self.location_marker = ""
                     self.activity.set("Session closed." if was_connected else "Connection ended before it became ready. See the connection log and terminal above.")
                     self.update_controls()
 

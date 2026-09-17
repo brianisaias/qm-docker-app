@@ -97,8 +97,8 @@ class LocalControls:
 
     def choose_yaml(self):
         selected = filedialog.askopenfilename(
-            title="Choose your Docker Compose YAML file",
-            filetypes=[("YAML files", "*.yml *.yaml"), ("All files", "*.*")],
+            title="Choose Docker Compose File",
+            filetypes=[("Docker Compose files", ("*.yml", "*.yaml")), ("All files", "*.*")],
         )
 
         if selected:

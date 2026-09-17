@@ -51,8 +51,7 @@ class TerminalDisplay:
             self.stream.feed(output)
         rendered_rows = [row.strip() for row in self.screen.display] if self.screen else []
         if self.max_marker in rendered_rows:
-            self.user_status.set("Local user: max | Folder: ~/work")
-            self.activity.set("Confirmed: logged in as max in ~/work. You can run pw.x.")
+            self.check_current_location()
             self.max_marker = "QM_MAX_" + secrets.token_hex(16)
 
         if not self.connected:
@@ -72,11 +71,29 @@ class TerminalDisplay:
                 )
 
                 self.connection_status.set(f"Terminal: CONNECTED — {label}")
-                self.user_status.set("Local user: max | Folder: ~/work" if self.method.get() == "local" else "School account: " + self.bronco_id.get().strip())
+                self.check_current_location()
                 self.activity.set(
                     "Ready. Check QE, show files, or run an input file."
                 )
                 self.update_controls()
+
+        if self.connected and not self.disconnecting and self.location_marker:
+            pattern = re.escape(self.location_marker) + r":([0-9a-f\s]+):([0-9a-f\s]+):END"
+            match = re.search(pattern, self.received)
+            if match is None:
+                match = re.search(pattern, "".join(rendered_rows))
+            if match:
+                try:
+                    user, folder = (
+                        bytes.fromhex(field).decode("utf-8").removesuffix("\n")
+                        for field in match.groups()
+                    )
+                    if not user or not folder.startswith("/"):
+                        raise ValueError("Missing user or absolute folder")
+                    self.user_status.set(f"Current user: {user} | Folder: {folder}")
+                except (ValueError, UnicodeDecodeError):
+                    self.user_status.set("Current user: unavailable")
+                self.location_marker = ""
 
         if self.calculating and self.job_marker:
             pattern = (
