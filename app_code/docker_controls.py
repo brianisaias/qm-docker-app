@@ -2,6 +2,7 @@
 """local controls for the main application window."""
 
 import json
+import re
 
 import threading
 
@@ -9,18 +10,27 @@ from pathlib import Path
 
 from tkinter import filedialog
 
-from .settings import SERVICE, SETTINGS_FOLDER, SETTINGS_FILE
+from .settings import BUNDLED_COMPOSE, SERVICE, SETTINGS_FOLDER, SETTINGS_FILE
 
 from .system_tools import run_command, find_program
 
 from .file_manager import resolve_shared_work
 
 class LocalControls:
+    @staticmethod
+    def docker_error_summary(error):
+        lines = [line.strip() for line in str(error).splitlines() if line.strip()]
+        useful = [line for line in lines if not re.search(r"\blevel=warning\b", line, re.I)]
+        return (useful or lines or [type(error).__name__])[-1]
+
     def load_path(self):
         try:
-            return SETTINGS_FILE.read_text(encoding="utf-8").strip()
+            saved = SETTINGS_FILE.read_text(encoding="utf-8").strip()
+            if saved and Path(saved).is_file():
+                return saved
         except OSError:
-            return ""
+            pass
+        return str(BUNDLED_COMPOSE) if BUNDLED_COMPOSE.is_file() else ""
 
 
     @staticmethod
@@ -28,6 +38,12 @@ class LocalControls:
         if not Path(path).is_file():
             raise RuntimeError("Choose an existing YAML file.")
         docker = find_program("docker")
+        services = run_command([docker, "compose", "-f", path, "config", "--services"]).splitlines()
+        if SERVICE not in services:
+            found = ", ".join(services) if services else "none"
+            raise RuntimeError(
+                f"This Compose file must define a service named '{SERVICE}'. Found: {found}."
+            )
         ids = run_command([docker, "compose", "-f", path, "ps", "--all", "--quiet", SERVICE]).splitlines()
         if not ids:
             return docker, None, {}
@@ -67,7 +83,7 @@ class LocalControls:
                     _, container, state = self.inspect_docker(path)
                     result = self.docker_description(container, state)
                 except Exception as error:
-                    result = ("Docker: STATUS UNAVAILABLE — " + str(error).splitlines()[0], "#9a6700")
+                    result = ("Docker: STATUS UNAVAILABLE — " + self.docker_error_summary(error), "#9a6700")
                 self.events.put(("docker_checked", (path, revision, result)))
             threading.Thread(target=check, daemon=True).start()
         self.after(5000, self.refresh_docker_status)
@@ -103,6 +119,9 @@ class LocalControls:
 
         if selected:
             self.compose_path.set(selected)
+            self.docker_revision += 1
+            self.activity.set("Docker Compose file selected. Checking it now…")
+            self.update_controls()
 
             try:
                 SETTINGS_FOLDER.mkdir(parents=True, exist_ok=True)

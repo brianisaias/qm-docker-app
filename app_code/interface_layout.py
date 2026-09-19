@@ -23,7 +23,6 @@ class InterfaceLayout:
         for key, label, callback in (
             ("Check current location", "Check current location", self.check_current_location),
             ("List current directory", "List current directory", self.list_current_directory),
-            ("Open school files", "Open school files", self.show_files),
             ("Stop Calculation", "Interrupt calculation", self.stop_calculation),
         ):
             button = ttk.Button(self.quick_actions, text=label, command=callback, style="Stop.TButton" if key == "Stop Calculation" else "TButton")
@@ -83,7 +82,7 @@ class InterfaceLayout:
         action(calculations, "Run Calculation", "Run an input file", "Choose an existing input-file path on the connected computer and run the calculation.", self.run_calculation)
         action(calculations, "Check QE", "Check program location", "Show the current user, folder, and where pw.x is installed. Does not run a calculation.", self.check_qe)
 
-        action(files, "Show Files", "Open local files", "Local: browse, import, rename, and delete shared files. School: browse, edit, upload, and download server files.", self.show_files)
+        action(files, "Show Files", "Open local files", "Local: browse, import, rename, and delete shared files. School: list the current server folder in the terminal.", self.show_files)
         self.max_button = action(files, None, "Use local max account", "Local only: switch to max if needed and return to the shared work folder (~/work).", self.switch_to_max)
         ttk.Label(files, text="Shared local file changes also affect your Windows/Mac work folder.", wraplength=720, style="Muted.TLabel").pack(anchor="w")
 
@@ -146,7 +145,7 @@ class InterfaceLayout:
         )
 
         self.buttons["Connect"].configure(text="Start & connect locally" if local else "Connect to school")
-        self.buttons["Show Files"].configure(text="Open local files" if local else "Open school files")
+        self.buttons["Show Files"].configure(text="Open local files" if local else "List school files")
         self.buttons["Disconnect"].configure(text="Close connection")
         if not local:
             self.docker_status.set("Docker: not used for School Server")

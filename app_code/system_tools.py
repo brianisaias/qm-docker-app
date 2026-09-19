@@ -44,6 +44,7 @@ def find_program(name):
             Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
             / "Docker/Docker/resources/bin/docker.exe",
             Path("/usr/local/bin/docker"),
+            Path("/opt/homebrew/bin/docker"),
             Path("/Applications/Docker.app/Contents/Resources/bin/docker"),
             Path.home() / ".docker/bin/docker",
         ]

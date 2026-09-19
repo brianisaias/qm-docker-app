@@ -18,7 +18,6 @@ from .system_tools import run_command, find_program
 
 from .terminal_process import TerminalProcess
 from .ssh_login import LoginSecret
-from .school_network import WARNING, detect_school_network
 
 class ConnectionControls:
     def connect(self):
@@ -45,10 +44,6 @@ class ConnectionControls:
                 return
 
         else:
-            if not self.network_approved or self.network_checking:
-                self.password.set("")
-                self.activity.set(WARNING)
-                return
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", username):
                 self.password.set("")
                 self.activity.set("Enter your Bronco ID without @ or spaces.")
@@ -188,10 +183,6 @@ class ConnectionControls:
                 ]
 
             else:
-                approved, network_message = detect_school_network()
-                self.events.put(("network_checked", (approved, network_message)))
-                if not approved:
-                    raise RuntimeError(WARNING)
                 ssh = find_program("ssh")
 
                 remote_command = (
@@ -251,7 +242,14 @@ class ConnectionControls:
                     break
 
         except Exception as error:
-            self.events.put(("error", "School connection failed. Check the network and login details." if method == "remote" else str(error)))
+            message = str(error).strip() or type(error).__name__
+            if method == "remote":
+                # Preserve a useful SSH error without ever displaying the password.
+                password = self.login_secret.password if self.login_secret is not None else ""
+                if password:
+                    message = message.replace(password, "[hidden]")
+                message = "School connection failed: " + message
+            self.events.put(("error", message))
             if terminal and method == "remote":
                 try:
                     terminal.close()

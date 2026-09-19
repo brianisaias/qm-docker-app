@@ -19,8 +19,6 @@ class DisplayTests(unittest.TestCase):
     def setUp(self):
         self.no_poll = patch.object(module.QuantumApp, 'refresh_docker_status')
         self.no_poll.start()
-        self.no_network = patch.object(module.QuantumApp, 'check_school_network')
-        self.no_network.start()
         self.app = module.QuantumApp()
         self.app.geometry('850x720')
         self.app.update()
@@ -33,10 +31,9 @@ class DisplayTests(unittest.TestCase):
             self.app.after_cancel(callback)
         self.app.destroy()
         self.no_poll.stop()
-        self.no_network.stop()
 
     def test_version_password_and_compose_widgets(self):
-        self.assertEqual(self.app.title(), 'Quantum ESPRESSO Controller v0.2.0')
+        self.assertEqual(self.app.title(), 'Quantum ESPRESSO Controller v0.3.1')
         self.assertEqual(str(self.app.password_entry['show']), '*')
         self.assertEqual(str(self.app.choose_button['text']), 'Choose Docker Compose File')
 
@@ -109,7 +106,6 @@ class DisplayTests(unittest.TestCase):
     def test_connect_button_dispatches_school_server(self):
         self.app.method.set('remote')
         self.app.bronco_id.set('testuser')
-        self.app.network_approved = True
         self.app.update_controls()
         with patch.object(module.threading, 'Thread') as thread:
             self.app.buttons['Connect'].invoke()
@@ -130,7 +126,6 @@ class DisplayTests(unittest.TestCase):
     def test_missing_id_produces_visible_feedback(self):
         self.app.method.set('remote')
         self.app.bronco_id.set('')
-        self.app.network_approved = True
         self.app.update_controls()
         self.app.buttons['Connect'].invoke()
         self.assertFalse(self.app.active)

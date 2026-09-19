@@ -3,7 +3,7 @@ import os
 import platform
 from pathlib import Path
 
-VERSION = "0.2.0"
+VERSION = "0.3.1"
 
 SERVER = "10.104.94.21"
 
@@ -25,5 +25,11 @@ SETTINGS_FOLDER = (
 
 
 SETTINGS_FILE = SETTINGS_FOLDER / "compose-path.txt"
+
+
+PROJECT_FOLDER = Path(__file__).resolve().parents[1]
+
+
+BUNDLED_COMPOSE = PROJECT_FOLDER / "compose.yaml"
 
 

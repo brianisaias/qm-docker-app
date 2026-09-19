@@ -25,7 +25,8 @@ def launch_desktop():
             return
         if sys.platform == "win32":
             candidates = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Docker/Docker/Docker Desktop.exe",
-                          Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Programs/Docker/Docker/Docker Desktop.exe"]
+                          Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Programs/Docker/Docker/Docker Desktop.exe",
+                          Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Programs/DockerDesktop/Docker Desktop.exe"]
             executable = next((p for p in candidates if p.is_file()), None)
             if executable is None:
                 raise RuntimeError("Docker Desktop is not installed in a standard location. Open it manually, then Connect.")

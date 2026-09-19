@@ -2,15 +2,15 @@
 
 Python desktop controls for local Quantum Mobile Docker and a school SSH server.
 
-## What changed in v0.2.0
+## Current testing checkpoint: v0.3.1
 
-- **Choose Docker Compose File** identifies the selected Compose file and filters for both `.yml` and `.yaml`. The existing saved-path behavior is preserved; the app does not bundle your Compose file or scientific data.
-- School login checks for **GlobalProtect connected to `vpn.connect.cpp.edu`** first. If no connected VPN is detected, it checks Wi-Fi for **eduroam**. A detected VPN takes priority in the displayed result. Until an approved connection is detected, the Bronco ID, masked password field, and school Connect button are disabled. Use **Check school network** after changing networks. The result names the detected connection in the network status and activity log, for example `Connected Wi-Fi: eduroam | School login available` or `Connected VPN: GlobalProtect (vpn.connect.cpp.edu) | School login available`. The worker rechecks before starting SSH.
-- Windows checks Wi-Fi with `netsh` and the GlobalProtect adapter with PowerShell. macOS uses `networksetup`, with a System Profiler fallback for Macs that incorrectly report Wi-Fi as disconnected, plus `scutil` and `ifconfig` for VPN detection. The fallback checks only the active network, not nearby networks, and may take up to 40 seconds. Missing commands, unavailable interfaces, privacy restrictions that hide the SSID, and detection errors leave school login disabled with a warning. A running GlobalProtect app alone is not proof of a connected VPN. Approval requires a live VPN interface and the latest GlobalProtect client status reporting Connected with portal `vpn.connect.cpp.edu`; a saved portal or another VPN does not qualify. The app reads only the tail of the local PanGPA status log and does not copy or display its contents. If that log is missing, unreadable, or uses an unsupported format, VPN verification fails and the app checks eduroam instead.
+- The included `compose.yaml` works from the project folder on Windows and macOS. It keeps work in the relative `work` folder, avoids host-specific paths, and requests x86 emulation for Apple Silicon. **Choose Docker Compose File** still accepts a custom `.yml` or `.yaml` file and remembers it on that computer.
+- Local Connect finds or opens Docker Desktop in the background, validates that the selected Compose file contains the `quantum-mobile` service, and displays the useful Docker error instead of an obsolete-version warning.
+- School Connect goes directly to SSH after validating the Bronco ID. The app does not attempt to decide whether GlobalProtect or the school network is ready; connect them first when they are required.
 - The Bronco password is held only in memory while connecting. The field clears when connection starts; the worker discards its copy after submitting it to SSH, or on failure, cancellation, or disconnection. **The app never permanently saves the Bronco password** in files, settings, logs, or credentials storage, and never passes it as a command argument. Authentication output after automatic password submission is withheld to prevent credential echo. SSH host-key verification remains enabled.
 - Local Docker and school SSH sessions automatically report their real shell user and absolute folder, for example `Current user: max | Folder: /home/max/work`. This describes the connected terminal, not the host Mac/Windows user. The result stays visible across tabs and clears on disconnection.
 - **Check current location** in the toolbar above the tabs refreshes the result after `cd` or a user switch. Use it at a shell prompt; paths containing spaces are supported. **Use local max account** also refreshes the actual location.
-- Windows and macOS terminal backends remain supported. The testing window title is **Quantum ESPRESSO Controller v0.2.0**. `app_code/settings.py` holds the central Python `VERSION` constant; the root `VERSION` file contains `0.2.0`, with a regression test checking they agree.
+- Windows and macOS terminal backends remain supported. The testing window title is **Quantum ESPRESSO Controller v0.3.1**.
 
 ## Run in PyCharm
 
@@ -18,9 +18,9 @@ Python desktop controls for local Quantum Mobile Docker and a school SSH server.
 2. Run the app. If terminal packages are missing, first-time setup installs them into the current Python environment. Internet access is needed only for installation; setup shows errors and allows retry. You can also install manually with `python -m pip install -r requirements.txt`.
 3. Run `main.py`.
 
-For local use, open Docker Desktop and choose your own Compose YAML file. The service must be named `quantum-mobile`, with the user `max` and a work directory at `/home/max/work`. The Compose file and scientific data are not included in this repository.
+For local use, select **My computer (Docker)** and click **Start & connect locally**. The included Compose file is selected automatically on a new computer. Docker Desktop opens in the background when possible. If Docker displays an update, license, or first-run prompt, finish it once and retry. Scientific files stay in the ignored `work` folder and are not committed to GitHub.
 
-For remote use, join an approved school network, select School Server, check the network, and enter your Bronco ID and password. OpenSSH connects to `10.104.94.21` and handles normal host-key verification. For SSH keys or interactive multi-factor authentication, leave the password field blank and answer the normal terminal prompts instead. Automatic password authentication times out after 60 seconds; close the connection and retry if needed. The configured server address is in `app_code/settings.py`.
+For remote use, connect GlobalProtect or the required school network first, select **School server (SSH)**, and enter your Bronco ID and password. OpenSSH connects to `10.104.94.21` and handles normal host-key verification. For SSH keys or interactive multi-factor authentication, leave the password field blank and answer the terminal prompts instead. Automatic password authentication times out after 60 seconds; close the connection and retry if needed.
 
 ## Controls
 
@@ -42,4 +42,4 @@ Run offline regression tests:
 python -m unittest discover -s automated_checks -v
 ```
 
-The suite includes non-graphical network, login, Compose selection, location, and version checks, plus Tk UI regression tests. UI tests skip with a reason if a subprocess cannot initialize a graphical Tk session. Platform command responses are simulated; these tests do not establish compatibility with every Docker setup, GlobalProtect version, or school-server login. School-server file upload and job-scheduler integration are not implemented.
+The suite includes non-graphical login, portable Compose, location, and version checks, plus Tk button and layout tests. UI tests skip with a reason if a graphical Tk session is unavailable. School-server file upload and job-scheduler integration are not implemented.

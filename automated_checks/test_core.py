@@ -14,9 +14,9 @@ from app_code.connection_manager import ConnectionControls
 from app_code.terminal_display import TerminalDisplay
 from app_code.status_events import StatusEvents
 from app_code.interface_layout import InterfaceLayout
-from app_code.school_network import detect_school_network, SchoolNetworkControls, parse_vpn_status, vpn_portal_confirmed
 from app_code.ssh_login import LoginSecret
 from app_code.docker_controls import LocalControls
+import app_code.docker_controls as docker_module
 from app_code.settings import VERSION
 
 
@@ -29,13 +29,13 @@ class Value:
         self.value = value
 
 
-class Harness(ConnectionControls, TerminalDisplay, StatusEvents, InterfaceLayout, SchoolNetworkControls):
+class Harness(ConnectionControls, TerminalDisplay, StatusEvents, InterfaceLayout):
     def __init__(self):
-        for name in ('activity', 'user_status', 'connection_status', 'job_status', 'password', 'bronco_id', 'compose_path', 'docker_status', 'network_status'):
+        for name in ('activity', 'user_status', 'connection_status', 'job_status', 'password', 'bronco_id', 'compose_path', 'docker_status'):
             setattr(self, name, Value())
         self.method = Value('remote')
         self.active = self.connected = self.calculating = self.disconnecting = self.docker_busy = self.closing = False
-        self.network_approved = self.network_checking = False
+        self.docker_revision = 0
         self.login_secret = None
         self.received = self.location_marker = self.job_marker = ''
         self.ready_marker = 'QM_READY_TEST'
@@ -46,127 +46,20 @@ class Harness(ConnectionControls, TerminalDisplay, StatusEvents, InterfaceLayout
         self.screen = pyte.Screen(100, 24)
         self.stream = pyte.Stream(self.screen)
         self.buttons = {name: Mock() for name in ('Connect', 'Disconnect', 'Check QE', 'Show Files', 'Run Calculation', 'Run pw.x', 'Stop Calculation', 'Check current location', 'List current directory')}
-        for name in ('local_radio', 'remote_radio', 'choose_button', 'id_entry', 'password_entry', 'network_button', 'docker_badge', 'stop_docker_button', 'max_button'):
+        for name in ('local_radio', 'remote_radio', 'choose_button', 'id_entry', 'password_entry', 'docker_badge', 'stop_docker_button', 'max_button'):
             setattr(self, name, Mock())
         self.after = Mock()
         self.render_terminal = Mock()
 
 
-class NetworkTests(unittest.TestCase):
-    def test_vpn_requires_live_connection_and_correct_portal(self):
-        for system in ('Windows', 'Darwin'):
-            for live in (False, True):
-                for portal in (False, True):
-                    def run(args, **kwargs):
-                        if args[0] == 'powershell.exe':
-                            return 'QM_GP_CONNECTED' if live else ''
-                        if '--nc' in args:
-                            return '(Connected) UUID "GlobalProtect"' if live else ''
-                        return ''
-                    approved, message = detect_school_network(system, run, lambda _: portal)
-                    self.assertEqual(approved, live and portal)
-                    if approved:
-                        self.assertIn('GlobalProtect (vpn.connect.cpp.edu)', message)
-
-    def test_vpn_first_skips_wifi(self):
-        for system in ('Windows', 'Darwin'):
-            calls = []
-            def run(args, **kwargs):
-                calls.append(args)
-                if args[0] == 'powershell.exe':
-                    return 'QM_GP_CONNECTED'
-                if '--nc' in args:
-                    return '(Connected) UUID "GlobalProtect"'
-                self.fail('Wi-Fi should not be checked after VPN confirmation')
-            self.assertTrue(detect_school_network(system, run, lambda _: True)[0])
-            self.assertEqual(len(calls), 1)
-
-    def test_only_eduroam_wifi_qualifies(self):
-        for system in ('Windows', 'Darwin'):
-            for ssid in ('eduroam', 'GuestNetwork', 'Home', 'eduroam-other'):
-                def run(args, **kwargs):
-                    if args[0] == 'netsh':
-                        return f'Name : Wi-Fi\nState : connected\nSSID : {ssid}'
-                    if '-listallhardwareports' in args:
-                        return 'Hardware Port: Wi-Fi\nDevice: en0'
-                    if '-getairportnetwork' in args:
-                        return 'Current Wi-Fi Network: ' + ssid
-                    return ''
-                approved, message = detect_school_network(system, run, lambda _: False)
-                self.assertEqual(approved, ssid == 'eduroam')
-                if approved:
-                    self.assertIn('Connected Wi-Fi: eduroam', message)
-
-    def test_mac_profiler_fallback_only_uses_connected_network(self):
-        for ssid, state, expected in [('eduroam', 'spairport_status_connected', True), ('Home', 'spairport_status_connected', False), ('eduroam', 'spairport_status_off', False), ('<redacted>', 'spairport_status_connected', False)]:
-            report = {"SPAirPortDataType": [{"spairport_airport_interfaces": [{
-                "spairport_status_information": state,
-                "spairport_current_network_information": {"_name": ssid},
-                "spairport_airport_other_local_wireless_networks": [{"_name": "eduroam"}],
-            }]}]}
-            def run(args, **kwargs):
-                return json.dumps(report) if args[0] == '/usr/sbin/system_profiler' else ''
-            self.assertEqual(detect_school_network('Darwin', run, lambda _: False)[0], expected)
-
-    def test_mac_dynamic_store_also_requires_portal(self):
-        def run(args, **kwargs):
-            if args[0] == '/bin/sh':
-                return 'InterfaceName : utun4'
-            if args[0] == '/sbin/ifconfig':
-                return 'utun4: flags=8051<UP,POINTOPOINT,RUNNING>\n inet 10.20.1.2 netmask 0xffffffff'
-            return ''
-        for portal in (True, False):
-            self.assertEqual(detect_school_network('Darwin', run, lambda _: portal)[0], portal)
-
-    def test_latest_vpn_status_and_exact_portal(self):
-        def response(state, portal):
-            return f'<response><type>status</type><status>{state}</status><portal>{portal}</portal></response>'
-        good = response('Connected', 'vpn.connect.cpp.edu')
-        self.assertTrue(parse_vpn_status(good))
-        self.assertTrue(parse_vpn_status(response('Connected', 'https://VPN.CONNECT.CPP.EDU/')))
-        for host in ('other.edu', 'vpn.connect.cpp.edu.other.edu', 'vpn.connect.cpp.edu@other.edu', ''):
-            self.assertFalse(parse_vpn_status(response('Connected', host)))
-        for state in ('Disconnected', 'Connecting', 'Restoring VPN Connection'):
-            self.assertFalse(parse_vpn_status(good + response(state, 'vpn.connect.cpp.edu')))
-        self.assertFalse(parse_vpn_status(good + '<response><type>status</type><state>Disconnected</state></response>'))
-        self.assertFalse(parse_vpn_status('saved portal vpn.connect.cpp.edu'))
-        self.assertFalse(parse_vpn_status('<response>broken</response>'))
-
-    def test_missing_status_log_denies_vpn(self):
-        with patch.object(Path, 'open', side_effect=PermissionError()):
-            self.assertFalse(vpn_portal_confirmed('Darwin'))
-            self.assertFalse(vpn_portal_confirmed('Windows'))
-
-    def test_missing_tools_and_invalid_profiler_data_do_not_crash(self):
-        for system in ('Windows', 'Darwin', 'Other'):
-            self.assertFalse(detect_school_network(system, Mock(side_effect=FileNotFoundError()), lambda _: False)[0])
-        for report in ('invalid', 'null', '[]', '{"SPAirPortDataType": null}'):
-            self.assertFalse(detect_school_network('Darwin', lambda args, **kw: report, lambda _: False)[0])
-
-    def test_school_controls_and_recheck(self):
-        app = Harness()
-        for approved in (False, True, False):
-            app.events.put(('network_checked', (approved, 'network result')))
-            app.poll_events()
-            self.assertEqual(app.network_status.get(), 'network result')
-            self.assertEqual(app.activity.get(), 'network result')
-            state = 'normal' if approved else 'disabled'
-            app.id_entry.configure.assert_called_with(state=state)
-            app.password_entry.configure.assert_called_with(state=state)
-            self.assertIn(unittest.mock.call(state=state), app.buttons['Connect'].configure.call_args_list)
-            app.buttons['Connect'].reset_mock()
-        app.method.set('local')
-        app.update_controls()
-        self.assertIn(unittest.mock.call(state='normal'), app.buttons['Connect'].configure.call_args_list)
-
-    def test_direct_connect_cannot_bypass_network(self):
+class ConnectionTests(unittest.TestCase):
+    def test_direct_connect_requires_id_not_network_probe(self):
         app = Harness()
         app.password.set('synthetic-secret')
         app.connect()
         self.assertFalse(app.active)
         self.assertEqual(app.password.get(), '')
-        self.assertIn('School login unavailable', app.activity.get())
-
+        self.assertIn('Bronco ID', app.activity.get())
 
 class PasswordTests(unittest.TestCase):
     def test_host_key_prompt_preserved_and_password_sent_once(self):
@@ -203,7 +96,6 @@ class PasswordTests(unittest.TestCase):
 
     def test_connect_moves_password_to_memory_only(self):
         app = Harness()
-        app.network_approved = True
         app.bronco_id.set('student')
         app.password.set('synthetic-secret')
         with patch('app_code.connection_manager.threading.Thread'), patch.object(Path, 'write_text') as write:
@@ -220,7 +112,7 @@ class PasswordTests(unittest.TestCase):
     def test_worker_failure_clears_password_and_hides_exception(self):
         app = Harness()
         app.login_secret = LoginSecret('synthetic-secret')
-        with patch('app_code.connection_manager.detect_school_network', return_value=(True, 'approved')), patch('app_code.connection_manager.find_program', side_effect=RuntimeError('synthetic-secret')):
+        with patch('app_code.connection_manager.find_program', side_effect=RuntimeError('synthetic-secret')):
             app.connection_worker('remote', '', 'student', app.ready_marker)
         self.assertIsNone(app.login_secret)
         self.assertNotIn('synthetic-secret', repr(list(app.events.queue)))
@@ -232,7 +124,7 @@ class PasswordTests(unittest.TestCase):
         terminal = Mock()
         terminal.read.side_effect = ["student@server password: ", "synthetic-", "secret\r\n" + app.ready_marker + "\r\n$ ", EOFError()]
         terminal.alive.return_value = False
-        with patch('app_code.connection_manager.detect_school_network', return_value=(True, 'approved')), patch('app_code.connection_manager.find_program', return_value='ssh'), patch('app_code.connection_manager.TerminalProcess', return_value=terminal) as spawn, patch.object(Path, 'write_text') as write:
+        with patch('app_code.connection_manager.find_program', return_value='ssh'), patch('app_code.connection_manager.TerminalProcess', return_value=terminal) as spawn, patch.object(Path, 'write_text') as write:
             app.connection_worker('remote', '', 'student', app.ready_marker)
         terminal.write.assert_called_once_with('synthetic-secret\r')
         self.assertIsNone(app.login_secret)
@@ -338,12 +230,40 @@ class LocationTests(unittest.TestCase):
 
 
 class ComposeVersionTests(unittest.TestCase):
+    def test_bundled_compose_is_portable_and_used_as_fallback(self):
+        root = Path(__file__).resolve().parents[1]
+        bundled = root / 'compose.yaml'
+        text = bundled.read_text(encoding='utf-8')
+        self.assertIn('quantum-mobile:', text)
+        self.assertIn('platform: linux/amd64', text)
+        self.assertIn('./work:/home/max/work', text)
+        self.assertNotIn('/sys/fs/cgroup', text)
+        self.assertNotRegex(text, r'(?m)^version:')
+        with tempfile.TemporaryDirectory() as folder:
+            missing = Path(folder) / 'missing-setting.txt'
+            with patch.object(docker_module, 'SETTINGS_FILE', missing), patch.object(docker_module, 'BUNDLED_COMPOSE', bundled):
+                self.assertEqual(LocalControls.load_path(Harness()), str(bundled))
+
+    def test_compose_service_is_validated_before_container_lookup(self):
+        with tempfile.NamedTemporaryFile(suffix='.yaml') as compose:
+            with patch('app_code.docker_controls.find_program', return_value='docker'), patch('app_code.docker_controls.run_command', return_value='other-service') as run:
+                with self.assertRaisesRegex(RuntimeError, 'quantum-mobile'):
+                    LocalControls.inspect_docker(compose.name)
+                self.assertEqual(len(run.call_args_list), 1)
+            with patch('app_code.docker_controls.find_program', return_value='docker'), patch('app_code.docker_controls.run_command', side_effect=['quantum-mobile', '']):
+                self.assertEqual(LocalControls.inspect_docker(compose.name), ('docker', None, {}))
+
+    def test_docker_error_summary_skips_obsolete_version_warning(self):
+        message = 'time="now" level=warning msg="version is obsolete"\nfailed to connect to Docker engine'
+        self.assertEqual(LocalControls.docker_error_summary(RuntimeError(message)), 'failed to connect to Docker engine')
+
     def test_yml_yaml_selection_saved_and_cancel_preserved(self):
         for suffix in ('.yml', '.yaml'):
             with tempfile.TemporaryDirectory() as folder:
                 settings = Path(folder) / 'compose-path.txt'
                 app = Harness()
                 selected = str(Path(folder) / ('compose' + suffix))
+                Path(selected).write_text('services: {}', encoding='utf-8')
                 with patch('app_code.docker_controls.filedialog.askopenfilename', return_value=selected) as dialog, patch('app_code.docker_controls.SETTINGS_FOLDER', Path(folder)), patch('app_code.docker_controls.SETTINGS_FILE', settings):
                     LocalControls.choose_yaml(app)
                     self.assertEqual(app.compose_path.get(), selected)
@@ -353,10 +273,11 @@ class ComposeVersionTests(unittest.TestCase):
                     dialog.return_value = ''
                     LocalControls.choose_yaml(app)
                     self.assertEqual(app.compose_path.get(), selected)
-                    self.assertFalse(Path(selected).exists())
+                    self.assertTrue(Path(selected).exists())
 
     def test_version_file_and_title_source(self):
         root = Path(__file__).resolve().parents[1]
-        self.assertEqual(VERSION, '0.2.0')
+        self.assertEqual(VERSION, '0.3.1')
         self.assertEqual((root / 'VERSION').read_text().strip(), VERSION)
         self.assertIn('self.title(f"Quantum ESPRESSO Controller v{VERSION}")', (root / 'app_code/window.py').read_text())
+
