@@ -55,6 +55,9 @@ class QuantumApp(InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, 
         self.location_marker = ""
         self.ready_marker = ""
         self.job_marker = ""
+        self.job_output_file = ""
+        self.last_input_file = ""
+        self.last_output_file = ""
         self.max_marker = "QM_MAX_" + secrets.token_hex(16)
         self.user_status = tk.StringVar(value="Terminal user: not connected")
         self.received = ""

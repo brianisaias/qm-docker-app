@@ -78,9 +78,12 @@ class InterfaceLayout:
         action(connection, "Disconnect", "Close connection", "Interrupt the foreground program and close the terminal. Local Docker stays running.", self.disconnect)
         self.stop_docker_button = action(connection, None, "Shut down local Docker", "Stop the Quantum Mobile container and its work. Does not shut down the school server.", self.stop_docker)
 
-        action(calculations, "Run pw.x", "Start pw.x", "Open Quantum ESPRESSO without an input file. It may wait for input; this is not a completed calculation.", self.run_pw_direct)
-        action(calculations, "Run Calculation", "Run an input file", "Choose an existing input-file path on the connected computer and run the calculation.", self.run_calculation)
-        action(calculations, "Check QE", "Check program location", "Show the current user, folder, and where pw.x is installed. Does not run a calculation.", self.check_qe)
+        action(calculations, "Check QE", "1. Check Quantum ESPRESSO", "Confirm pw.x is installed and show the connected user and folder.", self.check_qe)
+        action(calculations, "Create Calculation Folder", "2. Create calculation folder", "Create or enter one folder for this calculation, such as basic.", self.create_calculation_folder)
+        action(calculations, "Review Calculation Files", "3. Review required files", "List the .in input file and .UPF pseudopotential files in the current folder.", self.review_calculation_files)
+        action(calculations, "Run Calculation", "4. Run input and save output", "Choose a .in path. The app runs pw.x and saves a matching .out file, such as basic.in to basic.out.", self.run_calculation)
+        action(calculations, "Check Results", "5. Check results", "Verify that the .out file contains JOB DONE and show its total-energy line.", self.check_calculation_results)
+        action(calculations, "Run pw.x", "Start pw.x without a file", "Open pw.x directly for manual input. It may wait for input and does not create a normal .out file automatically.", self.run_pw_direct)
 
         action(files, "Show Files", "Open local files", "Local: browse, import, rename, and delete shared files. School: list the current server folder in the terminal.", self.show_files)
         self.max_button = action(files, None, "Use local max account", "Local only: switch to max if needed and return to the shared work folder (~/work).", self.switch_to_max)
@@ -156,7 +159,7 @@ class InterfaceLayout:
         ready = self.connected and not self.calculating and not self.disconnecting and not self.docker_busy
         self.max_button.configure(state="normal" if ready and local else "disabled")
 
-        for name in ("Check QE", "Show Files", "Run Calculation", "Run pw.x", "Check current location", "List current directory"):
+        for name in ("Check QE", "Create Calculation Folder", "Review Calculation Files", "Show Files", "Run Calculation", "Check Results", "Run pw.x", "Check current location", "List current directory"):
             self.buttons[name].configure(
                 state="normal" if ready else "disabled"
             )

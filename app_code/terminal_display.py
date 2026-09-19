@@ -114,14 +114,17 @@ class TerminalDisplay:
                 self.job_status.set(f"Calculation: FINISHED — exit code {code}")
 
                 if code == 0:
-                    self.activity.set(
-                        "Calculation process finished with exit code 0. "
-                        "Review the output for results."
-                    )
+                    if self.job_output_file:
+                        self.activity.set(
+                            f"Calculation finished. Output saved to {self.job_output_file}. "
+                            "Use Check results to verify JOB DONE and total energy."
+                        )
+                    else:
+                        self.activity.set("pw.x finished with exit code 0.")
                 else:
                     self.activity.set(
                         f"Calculation ended with exit code {code}. "
-                        "Review the terminal output."
+                        + (f"Review {self.job_output_file}." if self.job_output_file else "Review the terminal output.")
                     )
 
                 self.update_controls()

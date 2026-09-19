@@ -3,7 +3,7 @@ import os
 import platform
 from pathlib import Path
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 
 SERVER = "10.104.94.21"
 

@@ -33,7 +33,7 @@ class DisplayTests(unittest.TestCase):
         self.no_poll.stop()
 
     def test_version_password_and_compose_widgets(self):
-        self.assertEqual(self.app.title(), 'Quantum ESPRESSO Controller v0.3.1')
+        self.assertEqual(self.app.title(), 'Quantum ESPRESSO Controller v0.4.0')
         self.assertEqual(str(self.app.password_entry['show']), '*')
         self.assertEqual(str(self.app.choose_button['text']), 'Choose Docker Compose File')
 
@@ -76,7 +76,9 @@ class DisplayTests(unittest.TestCase):
             for key in ("Check current location", "List current directory", "Stop Calculation"):
                 self.assertEqual(self.app.buttons[key].master, self.app.quick_actions)
                 self.assertTrue(self.app.buttons[key].winfo_ismapped())
-        self.assertEqual(str(self.app.buttons['Run pw.x']['text']), 'Start pw.x')
+        self.assertEqual(str(self.app.buttons['Run pw.x']['text']), 'Start pw.x without a file')
+        self.assertEqual(str(self.app.buttons['Run Calculation']['text']), '4. Run input and save output')
+        self.assertEqual(str(self.app.buttons['Check Results']['text']), '5. Check results')
 
     def test_remote_disables_local_stop(self):
         self.app.method.set('remote')
@@ -142,6 +144,41 @@ class DisplayTests(unittest.TestCase):
             self.assertIn('pw.x;', command)
             self.assertNotIn('pw.x -in', command)
             self.assertTrue(self.app.calculating)
+
+    def test_guided_calculation_saves_matching_output(self):
+        self.app.connected = True
+        self.app.active = True
+        self.app.update_controls()
+        with patch.object(self.app, 'send') as send, patch.object(module.simpledialog, 'askstring', return_value='basic.in'):
+            self.app.buttons['Run Calculation'].invoke()
+        command = send.call_args.args[0]
+        self.assertIn('pw.x -input basic.in > basic.out 2>&1', command)
+        self.assertEqual(self.app.last_output_file, 'basic.out')
+        self.assertTrue(self.app.calculating)
+
+    def test_create_folder_and_review_files_use_current_terminal(self):
+        self.app.connected = True
+        self.app.active = True
+        self.app.update_controls()
+        with patch.object(self.app, 'send') as send, patch.object(module.simpledialog, 'askstring', return_value='basic'):
+            self.app.buttons['Create Calculation Folder'].invoke()
+            self.assertIn("mkdir -p -- basic && cd -- basic", send.call_args.args[0])
+            send.reset_mock()
+            self.app.review_calculation_files()
+            self.assertIn("-name '*.in'", send.call_args.args[0])
+            self.assertIn("-name '*.UPF'", send.call_args.args[0])
+
+    def test_check_results_looks_for_completion_and_energy(self):
+        self.app.connected = True
+        self.app.active = True
+        self.app.last_output_file = 'basic.out'
+        self.app.update_controls()
+        with patch.object(self.app, 'send') as send, patch.object(module.simpledialog, 'askstring', return_value='basic.out'):
+            self.app.buttons['Check Results'].invoke()
+        command = send.call_args.args[0]
+        self.assertIn('JOB DONE', command)
+        self.assertIn('total energy', command)
+        self.assertIn('basic.out', command)
 
     def test_local_file_navigation_and_import(self):
         with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as incoming:

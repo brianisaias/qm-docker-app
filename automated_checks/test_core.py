@@ -37,7 +37,8 @@ class Harness(ConnectionControls, TerminalDisplay, StatusEvents, InterfaceLayout
         self.active = self.connected = self.calculating = self.disconnecting = self.docker_busy = self.closing = False
         self.docker_revision = 0
         self.login_secret = None
-        self.received = self.location_marker = self.job_marker = ''
+        self.received = self.location_marker = self.job_marker = self.job_output_file = ''
+        self.last_input_file = self.last_output_file = ''
         self.ready_marker = 'QM_READY_TEST'
         self.max_marker = 'QM_MAX_TEST'
         self.events = queue.Queue()
@@ -45,7 +46,7 @@ class Harness(ConnectionControls, TerminalDisplay, StatusEvents, InterfaceLayout
         self.terminal = Mock()
         self.screen = pyte.Screen(100, 24)
         self.stream = pyte.Stream(self.screen)
-        self.buttons = {name: Mock() for name in ('Connect', 'Disconnect', 'Check QE', 'Show Files', 'Run Calculation', 'Run pw.x', 'Stop Calculation', 'Check current location', 'List current directory')}
+        self.buttons = {name: Mock() for name in ('Connect', 'Disconnect', 'Check QE', 'Create Calculation Folder', 'Review Calculation Files', 'Show Files', 'Run Calculation', 'Check Results', 'Run pw.x', 'Stop Calculation', 'Check current location', 'List current directory')}
         for name in ('local_radio', 'remote_radio', 'choose_button', 'id_entry', 'password_entry', 'docker_badge', 'stop_docker_button', 'max_button'):
             setattr(self, name, Mock())
         self.after = Mock()
@@ -277,7 +278,7 @@ class ComposeVersionTests(unittest.TestCase):
 
     def test_version_file_and_title_source(self):
         root = Path(__file__).resolve().parents[1]
-        self.assertEqual(VERSION, '0.3.1')
+        self.assertEqual(VERSION, '0.4.0')
         self.assertEqual((root / 'VERSION').read_text().strip(), VERSION)
         self.assertIn('self.title(f"Quantum ESPRESSO Controller v{VERSION}")', (root / 'app_code/window.py').read_text())
 

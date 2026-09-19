@@ -2,7 +2,7 @@
 
 Python desktop controls for local Quantum Mobile Docker and a school SSH server.
 
-## Current testing checkpoint: v0.3.1
+## Current testing checkpoint: v0.4.0
 
 - The included `compose.yaml` works from the project folder on Windows and macOS. It keeps work in the relative `work` folder, avoids host-specific paths, and requests x86 emulation for Apple Silicon. **Choose Docker Compose File** still accepts a custom `.yml` or `.yaml` file and remembers it on that computer.
 - Local Connect finds or opens Docker Desktop in the background, validates that the selected Compose file contains the `quantum-mobile` service, and displays the useful Docker error instead of an obsolete-version warning.
@@ -10,7 +10,8 @@ Python desktop controls for local Quantum Mobile Docker and a school SSH server.
 - The Bronco password is held only in memory while connecting. The field clears when connection starts; the worker discards its copy after submitting it to SSH, or on failure, cancellation, or disconnection. **The app never permanently saves the Bronco password** in files, settings, logs, or credentials storage, and never passes it as a command argument. Authentication output after automatic password submission is withheld to prevent credential echo. SSH host-key verification remains enabled.
 - Local Docker and school SSH sessions automatically report their real shell user and absolute folder, for example `Current user: max | Folder: /home/max/work`. This describes the connected terminal, not the host Mac/Windows user. The result stays visible across tabs and clears on disconnection.
 - **Check current location** in the toolbar above the tabs refreshes the result after `cd` or a user switch. Use it at a shell prompt; paths containing spaces are supported. **Use local max account** also refreshes the actual location.
-- Windows and macOS terminal backends remain supported. The testing window title is **Quantum ESPRESSO Controller v0.3.1**.
+- The Calculations tab now follows the basic course workflow: check pw.x, create a calculation folder, review `.in` and `.UPF` files, run the input into a matching `.out` file, and check for `JOB DONE` and total energy.
+- Windows and macOS terminal backends remain supported. The testing window title is **Quantum ESPRESSO Controller v0.4.0**.
 
 ## Run in PyCharm
 
@@ -27,7 +28,7 @@ For remote use, connect GlobalProtect or the required school network first, sele
 The toolbar above the tabs stays visible on every tab: **Check current location**, **List current directory** (including hidden files in the connected terminal), and **Interrupt calculation**. Directory actions are enabled when connected and idle; interrupt remains available during a calculation.
 
 - **Connection:** open a local or remote terminal, disconnect, or stop the local container.
-- **Calculations:** start pw.x, run an existing input file, interrupt the foreground program, or check its location.
+- **Calculations:** follow five numbered steps from setup through checking `JOB DONE` and total energy. A separate manual button starts pw.x without an input file.
 - **Files & User:** manage the local shared folder, list remote files, or use the local max account.
 
 Disconnect interrupts the foreground terminal program and exits the shell; it does not stop the local container. Stop Docker shuts down the local container. File deletion is permanent and affects the shared host folder.
