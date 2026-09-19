@@ -21,6 +21,11 @@ class StatusEvents:
 
 
     def close_app(self):
+        files = getattr(self, "remote_files_window", None)
+        if files is not None and files.winfo_exists():
+            files.close()
+            if files.winfo_exists():
+                return
         self.password.set("")
         if self.login_secret is not None:
             self.login_secret.clear()
@@ -38,16 +43,7 @@ class StatusEvents:
             while True:
                 kind, value = self.events.get_nowait()
 
-                if kind == "network_checked":
-                    self.network_checking = False
-                    self.network_approved, message = value
-                    self.network_status.set(message)
-                    self.activity.set(message)
-                    if not self.network_approved:
-                        self.password.set("")
-                    self.update_controls()
-
-                elif kind == "local_files_ready":
+                if kind == "local_files_ready":
                     folder, writable = value
                     LocalFilesWindow(self, folder, writable)
                     self.activity.set("Local file manager opened. Changes affect your shared work folder.")
@@ -89,6 +85,8 @@ class StatusEvents:
                     self.terminal_view.focus_set()
 
                 elif kind == "error":
+                    if self.active and not self.connected:
+                        self.connection_error = value
                     self.activity.set(value)
 
                 elif kind == "disconnect_attempt_finished":
@@ -110,7 +108,12 @@ class StatusEvents:
                     self.connection_status.set("Terminal: DISCONNECTED")
                     self.user_status.set("Terminal user: not connected")
                     self.location_marker = ""
-                    self.activity.set("Session closed." if was_connected else "Connection ended before it became ready. See the connection log and terminal above.")
+                    if was_connected:
+                        self.activity.set("Session closed.")
+                    else:
+                        failure = getattr(self, "connection_error", "")
+                        self.activity.set(failure or "Connection ended before it became ready. See the connection log and terminal above.")
+                    self.connection_error = ""
                     self.update_controls()
 
         except queue.Empty:

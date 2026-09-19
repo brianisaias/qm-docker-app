@@ -23,9 +23,8 @@ from .terminal_display import TerminalDisplay
 
 from .status_events import StatusEvents
 from .settings import VERSION
-from .school_network import SchoolNetworkControls, WARNING
 
-class QuantumApp(SchoolNetworkControls, InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, ConnectionControls, CalculationControls, tk.Tk):
+class QuantumApp(InterfaceLayout, TerminalDisplay, StatusEvents, LocalControls, ConnectionControls, CalculationControls, tk.Tk):
     def __init__(self):
         super().__init__()
 
@@ -51,6 +50,7 @@ class QuantumApp(SchoolNetworkControls, InterfaceLayout, TerminalDisplay, Status
         self.disconnecting = False
         self.cancel_connection = False
         self.closing = False
+        self.connection_error = ""
 
         self.location_marker = ""
         self.ready_marker = ""
@@ -64,9 +64,6 @@ class QuantumApp(SchoolNetworkControls, InterfaceLayout, TerminalDisplay, Status
         self.bronco_id = tk.StringVar()
         self.password = tk.StringVar()
         self.login_secret = None
-        self.network_approved = False
-        self.network_checking = False
-        self.network_status = tk.StringVar(value=WARNING)
 
         self.connection_status = tk.StringVar(value="Terminal: DISCONNECTED")
         self.activity = tk.StringVar(value="Choose a connection method.")
@@ -77,4 +74,3 @@ class QuantumApp(SchoolNetworkControls, InterfaceLayout, TerminalDisplay, Status
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.after(100, self.poll_events)
         self.after(300, self.refresh_docker_status)
-        self.after(400, self.check_school_network)

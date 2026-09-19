@@ -23,11 +23,14 @@ class InterfaceLayout:
         for key, label, callback in (
             ("Check current location", "Check current location", self.check_current_location),
             ("List current directory", "List current directory", self.list_current_directory),
+            ("Open school files", "Open school files", self.show_files),
             ("Stop Calculation", "Interrupt calculation", self.stop_calculation),
         ):
             button = ttk.Button(self.quick_actions, text=label, command=callback, style="Stop.TButton" if key == "Stop Calculation" else "TButton")
             button.pack(side="left", padx=(0, 8))
             self.buttons[key] = button
+        self.section_nav = ttk.Frame(panel)
+        self.section_nav.pack(fill="x", pady=(0, 4))
         self.sections = ttk.Notebook(panel)
         self.sections.pack(fill="x", pady=(0, 8))
         connection = ttk.Frame(self.sections, padding=(14, 8))
@@ -35,6 +38,9 @@ class InterfaceLayout:
         files = ttk.Frame(self.sections, padding=(14, 8))
         for page, title in [(connection, "1. Connection"), (calculations, "2. Calculations"), (files, "3. Files & User")]:
             self.sections.add(page, text=title)
+        # App-wide keyboard navigation keeps notebook pages reachable even
+        # when a native window manager does not forward notebook mouse clicks.
+        self.bind_all("<KeyPress>", self.app_key_shortcut, add="+")
 
         def action(parent, key, label, description, callback):
             row = ttk.Frame(parent)
@@ -69,9 +75,6 @@ class InterfaceLayout:
         ttk.Label(password_row, text="School password:", width=20).pack(side="left")
         self.password_entry = ttk.Entry(password_row, textvariable=self.password, show="*", width=22)
         self.password_entry.pack(side="left", padx=8)
-        self.network_button = ttk.Button(password_row, text="Check school network", command=self.check_school_network)
-        self.network_button.pack(side="left")
-        ttk.Label(connection, textvariable=self.network_status, wraplength=760, style="Muted.TLabel").pack(anchor="w")
         action(connection, "Connect", "Connect", "Open a terminal on your chosen computer. Local mode starts Quantum Mobile if needed.", self.connect)
         action(connection, "Disconnect", "Close connection", "Interrupt the foreground program and close the terminal. Local Docker stays running.", self.disconnect)
         self.stop_docker_button = action(connection, None, "Shut down local Docker", "Stop the Quantum Mobile container and its work. Does not shut down the school server.", self.stop_docker)
@@ -80,7 +83,7 @@ class InterfaceLayout:
         action(calculations, "Run Calculation", "Run an input file", "Choose an existing input-file path on the connected computer and run the calculation.", self.run_calculation)
         action(calculations, "Check QE", "Check program location", "Show the current user, folder, and where pw.x is installed. Does not run a calculation.", self.check_qe)
 
-        action(files, "Show Files", "Open local files", "Local: browse, import, rename, and delete shared files. School: list files in the terminal.", self.show_files)
+        action(files, "Show Files", "Open local files", "Local: browse, import, rename, and delete shared files. School: browse, edit, upload, and download server files.", self.show_files)
         self.max_button = action(files, None, "Use local max account", "Local only: switch to max if needed and return to the shared work folder (~/work).", self.switch_to_max)
         ttk.Label(files, text="Shared local file changes also affect your Windows/Mac work folder.", wraplength=720, style="Muted.TLabel").pack(anchor="w")
 
@@ -107,6 +110,20 @@ class InterfaceLayout:
         self.terminal_view.bind("<<Cut>>", lambda event: "break")
         self.update_controls()
 
+    def app_key_shortcut(self, event):
+        # Command on macOS (Mod2/0x10) and Control on Windows/Linux (0x4)
+        # avoid Option-number characters such as # or £ on Mac keyboards.
+        if not event.state & (4 | 16):
+            return None
+        if event.keysym in ("1", "2", "3"):
+            tabs = self.sections.tabs()
+            self.sections.select(tabs[int(event.keysym) - 1])
+            return "break"
+        if event.keysym.lower() == "o":
+            self.show_files()
+            return "break"
+        return None
+
     def update_controls(self):
         idle = not self.active and not self.docker_busy
         local = self.method.get() == "local"
@@ -118,20 +135,18 @@ class InterfaceLayout:
             state="normal" if idle and local else "disabled"
         )
         self.id_entry.configure(
-            state="normal" if idle and not local and self.network_approved and not self.network_checking else "disabled"
+            state="normal" if idle and not local else "disabled"
         )
 
-        school_ready = self.network_approved and not self.network_checking
-        self.password_entry.configure(state="normal" if idle and not local and school_ready else "disabled")
-        self.network_button.configure(state="disabled" if self.network_checking else "normal")
+        self.password_entry.configure(state="normal" if idle and not local else "disabled")
         if local:
             self.password.set("")
         self.buttons["Connect"].configure(
-            state="normal" if idle and (local or school_ready) else "disabled"
+            state="normal" if idle else "disabled"
         )
 
         self.buttons["Connect"].configure(text="Start & connect locally" if local else "Connect to school")
-        self.buttons["Show Files"].configure(text="Open local files" if local else "List server files")
+        self.buttons["Show Files"].configure(text="Open local files" if local else "Open school files")
         self.buttons["Disconnect"].configure(text="Close connection")
         if not local:
             self.docker_status.set("Docker: not used for School Server")
